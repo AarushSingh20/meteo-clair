@@ -15,6 +15,7 @@ import requests
 import streamlit as st
 
 import forecast_core as fc
+import scene as sc
 
 try:  # browser location ("Use my location" button); the app still works without this library
     from streamlit_js_eval import get_geolocation
@@ -46,109 +47,130 @@ st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 html, body, [class*="css"], .stMarkdown, button, input, textarea, select {{font-family: 'Plus Jakarta Sans', Inter, system-ui, sans-serif !important;}}
-.stApp {{background: #e3ecec;}}
+:root {{--fg: {INK}; --fg-muted: #33425b; --g1: 0.42; --g2: 0.16; --gb: 0.5; --tile: rgba(255,255,255,0.34); --line: rgba(20,33,58,0.08);}}
+html, body {{background: #6fa6d6;}}
+.stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stBottom"] {{background: transparent !important;}}
 header[data-testid="stHeader"] {{background: transparent;}}
-.block-container {{max-width: 1384px; background: #ffffff; border-radius: 32px; padding: 22px 26px 26px 22px !important;
-  margin-top: 28px; margin-bottom: 28px; box-shadow: 0 10px 40px rgba(23,34,56,0.10);}}
+/* no page "sheet": the cards float straight on the weather scene */
+.block-container {{max-width: 1384px; padding: 26px 26px 26px 22px !important; margin-top: 10px; margin-bottom: 10px;}}
+
+/* one glass recipe for every card: frosted, faint top highlight, soft edge that fades instead of a hard border */
+.mc-hero, .st-key-mapcard, .st-key-weekcard, .mc-tom, .st-key-rail, .mc-air, .st-key-pagecard {{
+  background: linear-gradient(145deg, rgba(255,255,255,var(--g1)) 0%, rgba(255,255,255,var(--g2)) 100%);
+  backdrop-filter: blur(22px) saturate(165%); -webkit-backdrop-filter: blur(22px) saturate(165%);
+  border: 1px solid rgba(255,255,255,var(--gb)) !important; border-right-color: rgba(255,255,255,calc(var(--gb) * 0.35)) !important;
+  border-bottom-color: rgba(255,255,255,calc(var(--gb) * 0.25)) !important;
+  box-shadow: 0 18px 50px -20px rgba(10,20,40,0.30), inset 0 1px 0 rgba(255,255,255,calc(var(--gb) * 0.9));
+  color: var(--fg);}}
+.mc-tile, .mc-insight, .mc-chip, div[data-testid="stSelectbox"] > div > div, .st-key-geo_btn button,
+.st-key-weekmetric button {{
+  background: var(--tile) !important; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,calc(var(--gb) * 0.8)) !important; color: var(--fg) !important;}}
+div[data-testid="stSelectbox"] * {{color: var(--fg);}}
+div[data-testid="stSelectbox"] svg {{fill: var(--fg);}}
+.st-key-weekmetric button[kind*="Active"], .st-key-weekmetric button[aria-checked="true"] {{
+  background: rgba(240,122,43,0.85) !important; color: #fff !important; border-color: rgba(255,255,255,0.6) !important;}}
+.st-key-weekmetric button p {{font-size: 13px;}}
 
 /* left icon rail */
-.st-key-rail {{background: #f5f7f8; border-radius: 22px; padding: 14px 6px; gap: 8px;}}
-.st-key-rail button {{width: 100%; min-height: 64px; border: 0; border-radius: 16px; background: transparent; color: {MUTED};
+.st-key-rail {{border-radius: 22px; padding: 14px 6px; gap: 8px;}}
+.st-key-rail button {{width: 100%; min-height: 64px; border: 0; border-radius: 16px; background: transparent; color: var(--fg-muted);
   padding: 6px 2px; font-weight: 600;}}
 .st-key-rail button > div {{flex-direction: column; align-items: center; gap: 2px;}}
-.st-key-rail button:hover {{background: #ffffff; color: {INK};}}
+.st-key-rail button:hover {{background: rgba(255,255,255,0.22); color: var(--fg);}}
 .st-key-rail button p {{font-size: 11px; white-space: nowrap;}}
-.st-key-place_0 button > div, .st-key-place_1 button > div {{justify-content: flex-start; width: 100%;}}
-.st-key-place_0 button p, .st-key-place_1 button p {{text-align: left;}}
-.st-key-weekmetric button p {{font-size: 13px;}}
 @media (max-width: 640px) {{
   .st-key-rail {{flex-direction: row; justify-content: space-around; padding: 6px;}}
   .st-key-rail > div {{flex: 1 1 0;}}
   .st-key-rail > div:first-child {{display: none;}}
   .st-key-rail button {{min-height: 52px;}}
 }}
-.st-key-nav_{st.session_state.page} button {{background: #ffe7d6 !important; color: #c4561a !important;}}
-.mc-logo {{width: 52px; height: 52px; border-radius: 16px; background: {ORANGE}; display: flex; align-items: center;
-  justify-content: center; margin: 2px auto 10px auto;}}
+.st-key-nav_{st.session_state.page} button {{background: rgba(240,122,43,0.88) !important; color: #fff !important;}}
+.mc-logo {{width: 52px; height: 52px; border-radius: 16px; background: linear-gradient(145deg, #f7924a, {ORANGE}); display: flex;
+  align-items: center; justify-content: center; margin: 2px auto 10px auto; box-shadow: 0 8px 20px -6px rgba(240,122,43,0.7);}}
 
 /* header */
-.mc-date {{font-size: 13px; color: {MUTED};}}
-.mc-name {{font-size: 24px; font-weight: 800; letter-spacing: -0.3px; color: {INK};}}
-div[data-testid="stSelectbox"] > div > div {{border-radius: 999px; background: #f2f5f6; border: 0; min-height: 46px;}}
+.mc-date {{font-size: 13px; color: var(--fg); font-weight: 600; opacity: 0.85;}}
+.mc-name {{font-size: 26px; font-weight: 800; letter-spacing: -0.3px; color: var(--fg);}}
+div[data-testid="stSelectbox"] > div > div {{border-radius: 999px; min-height: 46px;}}
 
-/* cards */
-.mc-hero {{position: relative; border-radius: 26px; padding: 22px 24px; min-height: 300px; overflow: hidden; color: {INK};}}
-.mc-chip {{display: inline-flex; align-items: center; gap: 8px; background: #fff; border-radius: 999px; padding: 8px 14px;
+/* hero */
+.mc-hero {{position: relative; border-radius: 26px; padding: 22px 24px; min-height: 300px; overflow: hidden;}}
+.mc-chip {{display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 8px 14px;
   font-size: 14px; font-weight: 600;}}
+.mc-chip svg {{stroke: var(--fg);}}
 .mc-hero .t1 {{font-size: 26px; font-weight: 700; margin-top: 16px;}}
-.mc-hero .t2 {{font-size: 14px; color: #44516a;}}
+.mc-hero .t2 {{font-size: 14px; color: var(--fg-muted);}}
 .mc-hero .big {{font-size: 88px; font-weight: 800; line-height: 1; letter-spacing: -3px; margin-top: 16px;}}
-.mc-hero .big span {{font-size: 30px; font-weight: 600; color: #44516a; letter-spacing: 0; margin-left: 8px;}}
-.mc-hero .illo {{position: absolute; right: 26px; top: 26px;}}
+.mc-hero .big span {{font-size: 30px; font-weight: 600; color: var(--fg-muted); letter-spacing: 0; margin-left: 8px;}}
+.mc-hero .illo {{position: absolute; right: 26px; top: 26px; filter: drop-shadow(0 10px 22px rgba(0,0,0,0.18));}}
 .mc-tiles {{position: absolute; right: 24px; bottom: 22px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end;}}
-.mc-tile {{background: #fff; border-radius: 18px; padding: 12px 16px; min-width: 104px;}}
-.mc-tile.lime {{background: #d7ef9b;}}
-.mc-tile .l {{font-size: 12px; color: #44516a; font-weight: 600;}}
-.mc-tile.lime .l {{color: #3a4a1a;}}
+.mc-tile {{border-radius: 18px; padding: 12px 16px; min-width: 104px;}}
+.mc-tile.lime {{background: rgba(190,235,110,0.38) !important;}}
+.mc-tile .l {{font-size: 12px; color: var(--fg-muted); font-weight: 600;}}
 .mc-tile .v {{font-size: 22px; font-weight: 800;}}
-.st-key-mapcard {{border-radius: 26px; overflow: hidden;}}
-.st-key-place_0 button, .st-key-place_1 button {{width: 100%; min-height: 72px; border: 0; border-radius: 20px;
-  background: #f5f7f8; justify-content: flex-start; text-align: left; padding: 12px 16px;}}
-.st-key-place_0 button:hover, .st-key-place_1 button:hover {{background: #eef2f4; color: {INK};}}
-.mc-air {{background: {NAVY}; color: #fff; border-radius: 22px; padding: 18px 20px; margin-top: 4px;}}
+.st-key-mapcard {{border-radius: 26px; overflow: hidden; padding: 6px;}}
+.st-key-mapcard [data-testid="stPlotlyChart"] {{border-radius: 20px; overflow: hidden;}}
+
+/* air card: a darker smoked glass */
+.mc-air {{background: linear-gradient(145deg, rgba(12,22,42,0.55), rgba(12,22,42,0.30)) !important; color: #fff;
+  border-radius: 22px; padding: 18px 20px; margin-top: 4px;}}
 .mc-air .h {{font-size: 18px; font-weight: 700; margin-bottom: 10px;}}
 .mc-air .row {{display: flex; gap: 22px; flex-wrap: wrap;}}
-.mc-air .l {{font-size: 12px; color: #b8c2d4;}}
+.mc-air .l {{font-size: 12px; color: rgba(255,255,255,0.75);}}
 .mc-air .v {{font-size: 24px; font-weight: 800;}}
-.mc-air .v small {{font-size: 12px; font-weight: 600; color: #b8c2d4;}}
+.mc-air .v small {{font-size: 12px; font-weight: 600; color: rgba(255,255,255,0.75);}}
 .mc-air .aqi {{display: flex; align-items: center; justify-content: space-between; gap: 12px;}}
 .mc-air .aqi .n {{font-size: 44px; font-weight: 800; line-height: 1.05;}}
 .mc-air .aqi .cat {{display: inline-block; padding: 5px 12px; border-radius: 999px; font-weight: 700; font-size: 14px; color: #fff;}}
 .mc-air .scale {{position: relative; height: 8px; border-radius: 4px; margin: 10px 0 16px;
   background: linear-gradient(90deg, #2e9e5b 0 10%, #8cc63f 10% 20%, #f2c12e 20% 40%, #f08a24 40% 60%, #e0402f 60% 80%, #9b1c31 80%);}}
 .mc-air .scale div {{position: absolute; top: -4px; width: 4px; height: 16px; margin-left: -2px; border-radius: 2px; background: #fff;}}
-.st-key-weekcard {{border: 1px solid #e8edf0; border-radius: 22px; padding: 18px 20px;}}
-.mc-weekh {{font-size: 20px; font-weight: 700; line-height: 1.25; color: {INK};}}
-.mc-bars {{display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: end; min-height: 190px; margin-top: 6px;}}
-.mc-bars > div {{display: flex; flex-direction: column; align-items: center; gap: 8px; border-right: 1px solid #edf1f3;}}
-.mc-bars > div:last-child {{border-right: 0;}}
-.mc-bars .v {{font-size: 18px; font-weight: 800;}}
-.mc-bars .bar {{width: 30px; border-radius: 10px;}}
-.mc-bars b {{font-size: 14px;}}
-.mc-bars .s {{font-size: 12px; color: {MUTED};}}
-.mc-air .tip {{background: rgba(255,255,255,0.08); border-radius: 14px; padding: 10px 12px; font-size: 13px;
-  line-height: 1.45; color: #e3e8f0; margin: 0 0 16px;}}
+.mc-air .tip {{background: rgba(255,255,255,0.10); border-radius: 14px; padding: 10px 12px; font-size: 13px;
+  line-height: 1.45; color: rgba(255,255,255,0.9); margin: 0 0 16px;}}
 .mc-air .tip .best {{margin-top: 6px; color: #fff;}}
-.st-key-geo_btn button {{width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 999px; border: 0;
-  background: #f5f7f8; color: {ORANGE};}}
-.st-key-geo_btn button:hover {{background: {ORANGE}; color: #fff;}}
-.mc-insight {{background: #f4f7f9; border-radius: 12px; padding: 8px 12px; font-size: 13px; color: {INK}; margin: 8px 0 0;}}
+
+/* week card */
+.st-key-weekcard {{border-radius: 22px; padding: 18px 20px;}}
+.mc-weekh {{font-size: 20px; font-weight: 700; line-height: 1.25; color: var(--fg);}}
+.mc-insight {{border-radius: 12px; padding: 8px 12px; font-size: 13px; margin: 8px 0 0;}}
 .st-key-weekcard [data-testid="stPlotlyChart"] {{cursor: pointer;}}
 .mc-aqiweek {{display: flex; flex-direction: column; gap: 4px; margin-top: 10px;}}
 .mc-aqiweek .r {{display: grid; grid-template-columns: 92px 1fr 58px; align-items: center; gap: 14px;
-  padding: 9px 0; border-bottom: 1px solid #edf1f3;}}
+  padding: 9px 0; border-bottom: 1px solid var(--line);}}
 .mc-aqiweek .r:last-child {{border-bottom: 0;}}
-.mc-aqiweek .d b {{display: block; font-size: 15px; color: {INK};}}
-.mc-aqiweek .d span, .mc-aqiweek .s {{font-size: 12px; color: {MUTED};}}
+.mc-aqiweek .d b {{display: block; font-size: 15px; color: var(--fg);}}
+.mc-aqiweek .d span, .mc-aqiweek .s {{font-size: 12px; color: var(--fg-muted);}}
 .mc-aqiweek .scale {{position: relative; height: 8px; border-radius: 4px; margin: 4px 0 7px;
   background: linear-gradient(90deg, #2e9e5b 0 10%, #8cc63f 10% 20%, #f2c12e 20% 40%, #f08a24 40% 60%, #e0402f 60% 80%, #9b1c31 80%);}}
 .mc-aqiweek .scale div {{position: absolute; top: -5px; width: 6px; height: 18px; margin-left: -3px; border-radius: 3px;
   background: {INK}; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25);}}
 .mc-aqiweek .n {{color: #fff; font-weight: 800; font-size: 17px; text-align: center; border-radius: 12px; padding: 7px 0;}}
-.mc-aqikey {{display: flex; flex-wrap: wrap; align-items: center; row-gap: 4px; font-size: 11px; color: {MUTED}; margin-top: 8px;}}
+.mc-aqikey {{display: flex; flex-wrap: wrap; align-items: center; row-gap: 4px; font-size: 11px; color: var(--fg-muted); margin-top: 8px;}}
 .mc-aqikey i {{display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin: 0 4px 0 10px;}}
 .mc-aqikey i:first-child {{margin-left: 0;}}
-.mc-tom {{position: relative; background: #e3f3b4; border-radius: 22px; padding: 18px 20px; min-height: 330px;
-  overflow: hidden; display: flex; flex-direction: column; color: {INK};}}
-.mc-tom .k {{font-size: 13px; color: #3a4a1a; font-weight: 600;}}
+
+/* tomorrow card: glass with a faint green tint */
+.mc-tom {{position: relative; background: linear-gradient(145deg, rgba(205,240,150,0.38), rgba(205,240,150,0.12)) !important;
+  border-radius: 22px; padding: 18px 20px; min-height: 330px; overflow: hidden; display: flex; flex-direction: column;}}
+.mc-tom .k {{font-size: 13px; color: var(--fg-muted); font-weight: 600;}}
 .mc-tom .p {{font-size: 20px; font-weight: 800;}}
-.mc-tom .illo {{position: absolute; right: 14px; top: 64px;}}
+.mc-tom .illo {{position: absolute; right: 14px; top: 64px; filter: drop-shadow(0 8px 18px rgba(0,0,0,0.18));}}
 .mc-tom .big {{margin-top: auto; font-size: 46px; font-weight: 800; letter-spacing: -1px;}}
 .mc-tom .c {{font-size: 14px; font-weight: 600;}}
-.mc-tom .lbl {{display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; color: #3a4a1a;}}
-.mc-tom .bar {{height: 8px; border-radius: 99px; background: #fff;}}
-.mc-tom .bar div {{height: 8px; border-radius: 99px; background: {NAVY};}}
-.mc-foot {{font-size: 12px; color: {MUTED}; text-align: center; margin-top: 14px;}}
+.mc-tom .lbl {{display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; color: var(--fg-muted);}}
+.mc-tom .bar {{height: 8px; border-radius: 99px; background: rgba(255,255,255,0.45);}}
+.mc-tom .bar div {{height: 8px; border-radius: 99px; background: {ORANGE};}}
+
+.st-key-geo_btn button {{width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 999px; color: {ORANGE} !important;}}
+.st-key-geo_btn button:hover {{background: rgba(240,122,43,0.85) !important; color: #fff !important;}}
+.st-key-pagecard {{border-radius: 26px; padding: 20px 24px;}}
+.st-key-pagecard, .st-key-pagecard p, .st-key-pagecard li, .st-key-pagecard h4, .st-key-pagecard h5,
+.st-key-pagecard [data-testid="stMetricValue"], .st-key-pagecard [data-testid="stMetricLabel"],
+.st-key-pagecard [data-testid="stCaptionContainer"] {{color: var(--fg) !important;}}
+.mc-demo {{display: inline-block; margin: 0 0 10px; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  color: #fff; background: rgba(240,122,43,0.85); box-shadow: 0 6px 18px -8px rgba(240,122,43,0.8);}}
+.mc-foot {{font-size: 12px; color: var(--fg); opacity: 0.8; text-align: center; margin-top: 14px;}}
 @media (max-width: 760px) {{
   .mc-hero .big {{font-size: 64px;}} .mc-hero .illo {{transform: scale(0.7); transform-origin: top right;}}
   .mc-tiles {{position: static; justify-content: flex-start; margin-top: 18px;}}
@@ -356,18 +378,20 @@ def icon_uri(name):
         return "data:image/svg+xml;base64," + base64.b64encode(fh.read()).decode()
 
 
-def condition_icon(cat, p):
+def condition_icon(cat, p, night=False):
+    """Same rule as the background scene (scene.kind_of), so icon and background always agree."""
     if cat == 3:
         return "thunderstorms-rain"
     if cat == 2:
         return "rain"
+    tod = "night" if night else "day"
     if cat == 1:
-        return "partly-cloudy-day-drizzle"
-    return "clear-day" if p < 0.2 else "partly-cloudy-day"
+        return f"partly-cloudy-{tod}-drizzle"
+    return f"clear-{tod}" if p < 0.2 else f"partly-cloudy-{tod}"
 
 
-def illo(cat, p, size=200):
-    return f'<img src="{icon_uri(condition_icon(cat, p))}" width="{size}" height="{size}" alt="">'
+def illo(cat, p, size=200, night=False):
+    return f'<img src="{icon_uri(condition_icon(cat, p, night))}" width="{size}" height="{size}" alt="">'
 
 
 def small_icon(name, size=22):
@@ -393,6 +417,7 @@ def amount_text(c, mm):
 # ------------------------------------------------------------------ "this week" charts (interactive, Plotly)
 BEAUFORT = [(2, "Calm"), (6, "Light air"), (12, "Light breeze"), (20, "Gentle breeze"), (29, "Moderate breeze"),
             (39, "Fresh breeze"), (50, "Strong breeze"), (1e9, "Gale")]
+TH = sc.theme("sunny", False)  # text colours for charts; updated once the weather scene is known
 RAIN_COL = {0: "#9cc7e6", 1: "#4f93c9", 2: "#2b6cb0", 3: "#3b3f8f"}
 
 
@@ -404,14 +429,22 @@ def day_names(d):
     return ["Today" if x == today else f"{x:%a}" for x in d.date], [f"{x:%a %d %b}" for x in d.date]
 
 
+def chart_theme():
+    """Transparent background and scene-aware text colours for Plotly charts on glass cards."""
+    return dict(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color=TH["fg"]),
+                xaxis=dict(gridcolor=TH["grid"], tickfont=dict(color=TH["muted"])),
+                yaxis=dict(gridcolor=TH["grid"], tickfont=dict(color=TH["muted"]), title=dict(font=dict(color=TH["muted"]))))
+
+
 def base_layout(fig, height=250):
     fig.update_layout(height=height, margin=dict(l=4, r=4, t=36, b=4), showlegend=False, bargap=0.45,
                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", dragmode=False,
-                      font=dict(family="Plus Jakarta Sans, sans-serif", color=INK, size=13),
+                      font=dict(family="Plus Jakarta Sans, sans-serif", color=TH["fg"], size=13),
                       hoverlabel=dict(bgcolor="#ffffff", bordercolor="#dfe6ea", font=dict(color=INK, size=13)))
-    fig.update_xaxes(showgrid=False, zeroline=False, fixedrange=True, tickfont=dict(size=14, color=INK))
-    fig.update_yaxes(showgrid=True, gridcolor="#eef2f4", griddash="dot", zeroline=False, fixedrange=True,
-                     tickfont=dict(size=11, color=MUTED))
+    fig.update_xaxes(showgrid=False, zeroline=False, fixedrange=True, tickfont=dict(size=14, color=TH["fg"]))
+    fig.update_yaxes(showgrid=True, gridcolor=TH["grid"], griddash="dot", zeroline=False, fixedrange=True,
+                     tickfont=dict(size=11, color=TH["muted"]))
     return fig
 
 
@@ -426,12 +459,12 @@ def week_chart(metric, d):
                  f"<br>Moderate (≥15.6 mm): {pm*100:.0f}%<br>Heavy (≥64.5 mm): {ph*100:.0f}%"
                  f"{'<br>Amount: ' + amount_text(int(c), mm) if int(c) > 0 else ''}"
                  for f, c, pr, pm, ph, mm in zip(full, cats, d.p_rain, d.p_moderate, d.p_heavy, d.rain_mm)]
-        fig.add_trace(go.Bar(x=x, y=[100] * len(x), marker=dict(color="#f1f5f7", cornerradius=14),
+        fig.add_trace(go.Bar(x=x, y=[100] * len(x), marker=dict(color=TH["track"], cornerradius=14),
                              hovertext=hover, hoverinfo="text"))
         fig.add_trace(go.Bar(x=x, y=np.maximum(p, 3), marker=dict(color=[RAIN_COL[int(c)] for c in cats], cornerradius=14),
                              hovertext=hover, hoverinfo="text"))
         fig.add_trace(go.Scatter(x=x, y=np.maximum(p, 3) + 9, mode="text", text=[f"<b>{v:.0f}%</b>" for v in p],
-                                 textfont=dict(size=15, color=INK), hoverinfo="skip"))
+                                 textfont=dict(size=15, color=TH["fg"]), hoverinfo="skip"))
         fig.update_layout(barmode="overlay")
         fig.update_yaxes(range=[0, 104], tickvals=[0, 50, 100], ticksuffix="%")
         for xi, c, pr in zip(x, cats, d.p_rain):
@@ -450,11 +483,11 @@ def week_chart(metric, d):
                              marker=dict(color=d.tmax, colorscale=[[0, "#f7c9a4"], [1, ORANGE]],
                                          cmin=hi - 4, cmax=hi, cornerradius=14)))
         fig.add_trace(go.Scatter(x=x, y=d.tmax, mode="markers+text", text=[f"<b>{v:.0f}°</b>" for v in d.tmax],
-                                 textposition="top center", textfont=dict(size=16, color=INK),
+                                 textposition="top center", textfont=dict(size=16, color=TH["fg"]),
                                  marker=dict(size=12, color="#fff", line=dict(color=ORANGE, width=3)),
                                  hovertext=hover, hoverinfo="text"))
         fig.add_trace(go.Scatter(x=x, y=d.tmin, mode="markers+text", text=[f"{v:.0f}°" for v in d.tmin],
-                                 textposition="bottom center", textfont=dict(size=13, color=MUTED),
+                                 textposition="bottom center", textfont=dict(size=13, color=TH["muted"]),
                                  marker=dict(size=10, color="#fff", line=dict(color=BLUE, width=3)),
                                  hovertext=hover, hoverinfo="text"))
         fig.update_yaxes(range=[lo - 6, hi + 6], ticksuffix="°")
@@ -465,16 +498,17 @@ def week_chart(metric, d):
     # Wind
     k = d.wind * 3.6
     top = max(30.0, float(k.max()) * 1.4)
-    for lo_, hi_, nm, col in [(0, 6, "calm", "#fbfcfd"), (6, 20, "light breeze", "#f5f9fb"),
-                              (20, 39, "moderate–fresh", "#eef4f8"), (39, 300, "strong", "#e6eff5")]:
+    for (lo_, hi_, nm), a_ in zip([(0, 6, "calm"), (6, 20, "light breeze"), (20, 39, "moderate–fresh"), (39, 300, "strong")],
+                                  TH["band"]):
+        col = f"rgba(255,255,255,{a_})"
         if lo_ < top:
             fig.add_hrect(y0=lo_, y1=min(hi_, top), fillcolor=col, line_width=0, layer="below")
             fig.add_annotation(x=1, xref="paper", xanchor="right", y=min(hi_, top), yanchor="top", showarrow=False,
-                               text=nm, font=dict(size=10, color=MUTED))
+                               text=nm, font=dict(size=10, color=TH["muted"]))
     hover = [f"<b>{f}</b><br>Wind: <b>{v:.0f} km/h</b> ({v/3.6:.1f} m/s)<br>{beaufort(v)}" for f, v in zip(full, k)]
     fig.add_trace(go.Scatter(x=x, y=k, mode="lines+markers+text", line=dict(shape="spline", color=BLUE, width=4),
                              fill="tozeroy", fillcolor="rgba(79,147,201,0.12)", text=[f"<b>{v:.0f}</b>" for v in k],
-                             textposition="top center", textfont=dict(size=15, color=INK),
+                             textposition="top center", textfont=dict(size=15, color=TH["fg"]),
                              marker=dict(size=13, color="#fff", line=dict(color=BLUE, width=3)),
                              hovertext=hover, hoverinfo="text"))
     fig.update_yaxes(range=[0, top], ticksuffix=" km/h", showgrid=False)
@@ -529,6 +563,7 @@ with main:
         row = LOCS[LOCS.label == st.session_state.loc].iloc[0]
     region = region_of(row)
     page = st.session_state.page
+    scene_slot = st.empty()  # weather background, filled once today's forecast is known
 
     # ================================================================ FORECAST
     if page in ("forecast", "map"):
@@ -547,6 +582,8 @@ with main:
         if show.empty:
             st.warning("The latest NASA data is too old to forecast today. Please try again later.")
             st.stop()
+        t0 = show.iloc[0]
+        st.session_state.scene = (sc.kind_of(int(t0.rain_cat), float(t0.p_rain)), float(t0.wind) * 3.6)
 
     # Real street map from plain image tiles. Default: OpenStreetMap (no key). Optional: MapTiler if a key is in secrets.
     try:
@@ -581,20 +618,42 @@ with main:
             margin=dict(l=0, r=0, t=0, b=0), height=height, showlegend=False)
         return fig
 
+    _hour = dt.datetime.now(ZoneInfo("Asia/Kolkata")).hour
+    _kind, _wind = st.session_state.get("scene", ("cloudy", 8.0))
+    _night = _hour >= 19 or _hour < 6
+    # demo override, e.g. ?scene=storm&wind=30&night=1 (handy for presentations)
+    _q = st.query_params
+    _demo = _q.get("scene") in sc.SKY or "wind" in _q or "night" in _q
+    if _q.get("scene") in sc.SKY:
+        _kind = _q.get("scene")
+    try:
+        _wind = float(_q.get("wind", _wind))
+    except ValueError:
+        pass
+    if _q.get("night") in ("0", "1"):
+        _night = _q.get("night") == "1"
+    scene_slot.markdown(sc.scene_html(_kind, _wind, night=_night), unsafe_allow_html=True)
+    TH.update(sc.theme(_kind, _night))
+    _real_night = _hour >= 19 or _hour < 6
+    if _demo:
+        st.markdown(f'<div class="mc-demo">Demo background: {_kind}{" · night" if _night else ""}'
+                    f'{f" · wind {_wind:.0f} km/h" if "wind" in _q else ""} · the forecast below is real</div>',
+                    unsafe_allow_html=True)
+
     if page == "forecast":
         t = show.iloc[0]
         c, p = int(t.rain_cat), float(t.p_rain)
         # ---------------- row 1: Today hero + map
         r1a, r1b = st.columns([7, 5], gap="medium")
         r1a.markdown(f"""
-<div class="mc-hero" style="background:{hero_bg(c, p)}">
+<div class="mc-hero">
   <span class="mc-chip"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{INK}" stroke-width="2"
     stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/>
     <circle cx="12" cy="9" r="2.5"/></svg>{html.escape(short_name(row.label))}</span>
   <div class="t1">Today</div>
   <div class="t2">{html.escape(fc.rain_label(c, p))}{(' · ' + amount_text(c, t.rain_mm)) if c else ''}</div>
   <div class="big">{t.tmax:.0f}°<span>/ {t.tmin:.0f}°C</span></div>
-  <div class="illo">{illo(c, p, 190)}</div>
+  <div class="illo">{illo(c, p, 190, night=_real_night)}</div>
   <div class="mc-tiles">
     <div class="mc-tile lime"><div class="l">{small_icon("raindrops")}Rain chance</div><div class="v">{p*100:.0f}%</div></div>
     <div class="mc-tile"><div class="l">{small_icon("humidity")}Humidity</div><div class="v">{t.humidity:.0f}%</div></div>
@@ -691,33 +750,35 @@ with main:
 
     # ================================================================ MAP
     elif page == "map":
-        st.markdown(f"#### Map · {short_name(row.label)}")
-        with st.container(key="mapcard"):
+        pc = st.container(key="pagecard")
+        pc.markdown(f"#### Map · {short_name(row.label)}")
+        with pc.container(key="mapcard"):
             st.plotly_chart(map_figure(620, 6), width="stretch", key=f"map_page_{row.location_id}",
                             config={"displayModeBar": False, "scrollZoom": True})
-        st.caption("Orange = selected place (today's max temperature). Blue dots = the 411 forecast locations; "
+        pc.caption("Orange = selected place (today's max temperature). Blue dots = the 411 forecast locations; "
                    "hover to see names, scroll to zoom. Choose another place with the search box above.")
 
     # ================================================================ MODEL CHECK
     elif page == "check":
-        st.markdown("#### Model check — forecasts vs what actually happened in 2025")
-        st.caption("2025 was never seen during training. With NASA's ~3-day delay, 'today' is about lead 3 and 'tomorrow' lead 4.")
+        pc = st.container(key="pagecard")
+        pc.markdown("#### Model check — forecasts vs what actually happened in 2025")
+        pc.caption("2025 was never seen during training. With NASA's ~3-day delay, 'today' is about lead 3 and 'tomorrow' lead 4.")
         VAL = load_validation()
         vid = row.get("near_id", row.location_id)
         if "near_id" in row:
-            st.info(f"{short_name(row.label)} was not one of the 411 test locations, so this shows the nearest one: "
+            pc.info(f"{short_name(row.label)} was not one of the 411 test locations, so this shows the nearest one: "
                     f"**{short_name(row.near_label)}** ({row.near_km:.0f} km away).")
         v = VAL[VAL.location_id == vid].copy()
         v["target_date"] = pd.to_datetime(v.target_date)
-        c1, c2 = st.columns(2)
+        c1, c2 = pc.columns(2)
         lead = c1.select_slider("Forecast lead (days after the latest data)", options=list(range(1, F.H + 1)), value=4)
         month = c2.selectbox("Month", list(range(1, 13)), index=6, format_func=lambda m: dt.date(2025, m, 1).strftime("%B"))
         s = v[(v.lead == lead) & (v.target_date.dt.month == month)].sort_values("target_date")
         if s.empty:
-            st.warning("No 2025 data for this selection.")
+            pc.warning("No 2025 data for this selection.")
         else:
             hit = ((s.obs_rain >= 2.5) & (s.pred_rain >= 2.5)).sum()
-            k1, k2, k3, k4 = st.columns(4)
+            k1, k2, k3, k4 = pc.columns(4)
             k1.metric("Rainy days (observed)", int((s.obs_rain >= 2.5).sum()))
             k2.metric("…correctly forecast", int(hit))
             k3.metric("Max temp error", f"±{(s.obs_tmax - s.pred_tmax).abs().mean():.1f} °C")
@@ -729,28 +790,29 @@ with main:
             fig.add_hline(y=64.5, line=dict(color="#888", dash="dash", width=1),
                           annotation_text="heavy rain ≥ 64.5 mm", annotation_position="top left")
             fig.update_layout(height=320, yaxis_title="mm/day", hovermode="x unified", margin=dict(t=30, b=10),
-                              legend=dict(orientation="h", y=-0.2))
-            st.plotly_chart(fig, width="stretch")
+                              legend=dict(orientation="h", y=-0.2), **chart_theme())
+            pc.plotly_chart(fig, width="stretch")
             fig = go.Figure()
             for col, nm, color in [("tmax", "Max temp", ORANGE), ("tmin", "Min temp", BLUE)]:
                 fig.add_trace(go.Scatter(x=s.target_date, y=s[f"obs_{col}"], name=f"{nm} observed", line=dict(color=color, width=2)))
                 fig.add_trace(go.Scatter(x=s.target_date, y=s[f"pred_{col}"], name=f"{nm} forecast",
                                          line=dict(color=color, width=2, dash="dash")))
             fig.update_layout(height=290, yaxis_title="°C", hovermode="x unified", margin=dict(t=30, b=10),
-                              legend=dict(orientation="h", y=-0.25))
-            st.plotly_chart(fig, width="stretch")
-        st.markdown(f"##### Accuracy over all {region} locations, 2025")
+                              legend=dict(orientation="h", y=-0.25), **chart_theme())
+            pc.plotly_chart(fig, width="stretch")
+        pc.markdown(f"##### Accuracy over all {region} locations, 2025")
         sk = pd.DataFrame(F.cfg["regions"][region]["skill"])
-        st.dataframe(pd.DataFrame({
+        pc.dataframe(pd.DataFrame({
             "Lead (days)": sk.lead, "Rain CSI ≥2.5 mm": sk.CSI_rain, "Persistence CSI": sk.pers_CSI_rain,
             "Moderate CSI ≥15.6": sk.CSI_mod, "Heavy CSI ≥64.5": sk.CSI_heavy,
             "Max temp error °C": sk.MAE_tmax, "Min temp error °C": sk.MAE_tmin,
             "Humidity error %": sk.MAE_hum, "Wind error m/s": sk.MAE_wind}).round(3), width="stretch", hide_index=True)
-        st.caption("CSI = hits ÷ (hits + misses + false alarms); 1 is perfect. Persistence = 'tomorrow is like today'.")
+        pc.caption("CSI = hits ÷ (hits + misses + false alarms); 1 is perfect. Persistence = 'tomorrow is like today'.")
 
     # ================================================================ ABOUT
     else:
-        st.markdown(f"""
+        pc = st.container(key="pagecard")
+        pc.markdown(f"""
 #### About {APP_NAME}
 1. **Input:** the last 30 days of daily weather for the place from the **NASA POWER** API
    (temperature, dewpoint, humidity, pressure, wind, rainfall, max/min temperature, wind components, specific humidity),

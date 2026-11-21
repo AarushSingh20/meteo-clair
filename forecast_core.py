@@ -241,8 +241,8 @@ def air_summary(df, now):
     days = {}
     for d, g in df.groupby(df.index.date):
         if len(g) >= 20:
-            aqi, main, conc = indian_aqi(g)
-            days[d] = dict(aqi=aqi, main=main, pm2_5=conc["pm2_5"], pm10=conc["pm10"])
+                       d_aqi, d_main, d_conc = indian_aqi(g)  # own names, so the "now" values above are not overwritten
+            days[d] = dict(aqi=d_aqi, main=d_main, pm2_5=d_conc["pm2_5"], pm10=d_conc["pm10"])
     best = None
     nxt = df[(df.index > now) & (df.index <= now + pd.Timedelta(hours=24))]
     if len(nxt) >= 6:
